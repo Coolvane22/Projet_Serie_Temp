@@ -1,0 +1,150 @@
+---
+title: "Projet_SerieTemp"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importation librairies
+```{r}
+library(tidyverse)
+library(plotly)
+library(latex2exp)
+library(forecast)
+library(patchwork)
+library(kableExtra)
+library(htmltools)
+library(lubridate)
+library(xts)
+```
+
+## Importation des données 
+Source des données : https://www.insee.fr/fr/statistiques/series/102765746
+
+Notre jeu de données concerne les dépenses de l'Etat cumulées depuis l'année 2009 jusqu'au mois de février 2022.
+L'unité des dépenses est le milion d'euros. 
+
+
+```{r}
+caracteristiques <- read.csv("caractéristiques.csv", sep =";")
+v_mensuelles <- read.csv("valeurs_mensuelles.csv", sep =",")
+head(caracteristiques)
+head(v_mensuelles)
+```
+
+Nous concentrons l'étude sur les dépenses:
+```{r}
+vm_depenses <- v_mensuelles[1:2]
+colnames(vm_depenses) <- c("Date", "Depenses")
+vm_depenses[,1]<-ym(vm_depenses[,1]) #Transformation en date
+class(vm_depenses[,1]) # Vérification de la transformation en date
+vm_depenses%>% plot_ly(type = "scatter", mode = "lines") %>% add_trace( x = ~Date, y=~Depenses)
+```
+
+Notre première analyse est donc que le graphique des dépenses cumulées par année présente un pic annuelle au mois de décembre: Puisque c'est la somme de tout les mois précédents. On remarque quand même une tendance qui se dégage : une tendance à la hausse . La première interprétation de cette hausse est les dépenses liées à la crise du covid : achat de masques, dépenses dans les hopitaux, santé , vaccins. On identifie aussi un pic pour l'année 2010: la première interprétation serait la tempête Xynthia qui a traversé la France en février 2010. L'Etat aura donc été obligé de dépenser pour les réparations des dommages immobilier.
+
+Nous allons commencer à analyser plus en profondeur les dépenses mensuelles.
+
+On peut aussi utiliser les dépenses pour repérer les différents politiques au fil des années : est-ce que les différents gouvernements jouent sur l'enveloppe des dépenses ou est- ce similaire ?
+
+  
+Le but de notre série temporelle serait de prédire les dépenses des années prochaines :
+On va donc commencer par passer en dépense non cumulé :
+```{r}
+for (j in 1:13){
+  for (i in 2:12){
+     vm_depenses[i+((j-1)*12),2]<-vm_depenses[i+((j-1)*12),2]-sum(vm_depenses[(1+((j-1)*12)):((i-1)+((j-1)*12)),2])
+   }
+ }
+ head(vm_depenses)
+
+```
+  
+```{r}
+ vm_depenses%>% plot_ly(type = "scatter", mode = "lines") %>% add_trace( x = ~Date, y=~Depenses) 
+```
+Voici donc le graphe des dépenses mensuelles non cumulées : Première remarque, nous identifions un pic annuel en avril : Nous avons pour l'instant pas d'idée sur l'interprétation 
+
+Nous transformons le tableau en série temporelle afin d'utiliser la fonction ggplotdisplay.
+
+```{r}
+ts.depenses = xts(vm_depenses$Depenses, vm_depenses$Date)
+ts.depenses %>% 
+  ggtsdisplay(
+    plot.type = "scatter"
+  )
+```
+ 
+ On a donc le premier graphique :courbe des dépenses au cours du temps comme précédemment. Nous avons l'ACF : nous reconnaissons donc la saisonnalité annuelle du pic d'avril
+ Concernant le graphe des résidus, leur structure montre la présence de résidus corréelés.
+
+```{r}
+ts = ts(vm_depenses$Depenses, frequency=12)
+forecast::ggmonthplot(ts)
+```
+Ce grpahique nous permet d'identifier les tendances par mois : Les barres correspondent à la moyenne par mois.
+Cela nous rassure sur notre première idée de pic annuel : En effet, le mois d'avril est bien le mois avec la dépense la plus élevé pour chauqe année. Au contraire, le mois d'Aout présente la plus petite dépense , mais avec une différence faible par rapport aux mois de Septembre ou mars.
+ 
+
+
+On décide de faire plusieurs modèles : un  modèle global sur la période 2009 - 2022, et des modèles en fonction du mandat : nous séparons les données en 3 périodes.
+2009 - avr 2012 la période du mandat de Nicolas Sarkozy donc parti des républicains 
+mai 2012 - avr 2017 la période du mandat de Francois Hollande donc parti socialiste
+mai 2017 - 2022 la période du mandat d'Emmanuel Macron donc parti Répubique en marche 
+Puis comparons les résultats afin d'identifier si il y a une  différence parmi les politiques des différents gouvernement.
+Il ne faut pas oublier que chaque mandat possède des gouvernements différents dès qu'il y a remaniement des miistes (spécialement, le premier ministre)
+
+
+## Etude du modele global 
+# Suppression tendande
+Nous commencons par utiliser l'opérateur différence polynomiale pour identifier la tendance :
+```{r}
+pacf(ts.depenses)
+
+ts.depenses %>% 
+  diff(
+    differences = 1
+  ) %>% 
+  ggtsdisplay(
+    plot.type = "scatter"
+  )
+
+plot(diff(ts, differences = 1))
+abline(h=mean(na.omit((diff(ts, differences = 1)))), col="red", lwd=1)
+```
+On identifie la saisonnalité dans l'ACF, et peut-être encore une tendance.
+Néanmoins, dans le dernier graphique, on a rajouté la moyenne des différences:
+on voit donc que les données sont bien centrés en 0.
+Nous avons donc une tendance polynomiale en 1 , et nous n'avons pas besoin de chercher un opérateur différence plus elevé
+
+Nous avons donc notre série temporelle sans la tendance:
+```{r}
+serie_wo_tendance <- diff(ts, differences=1)
+plot(serie_wo_tendance)
+
+```
+Ici, notre graphqiue sans la tendance globale
+# Suppression saisonnalité 
+Nous cherchons donc à supprimer la saisonnalité : PAr les graphiques précédents, on suppose une saisonnalité annuelle : on fixe donc lag à 12.
+```{r}
+plot(diff(serie_wo_tendance, lag=12))
+acf(diff(serie_wo_tendance, lag=12))
+
+```
+Lorsqu'on étudie le graph de l'ACF, on voit que les pics à partir d'une moitié d'année, reste dans l'intervalle centré à 0 . Cela veut donc bien dire qu'on a supprimé la saisonnalité annuelle.
+
+```{r}
+serie_wo_ts <- diff(serie_wo_tendance, lag=12)
+plot(serie_wo_ts)
+```
+
+# Test de stationnarité
+Espérance constante : Normalement, déjà fait avce la suppression tendance/saiso
+A etudier: variance 
+
+
+## Etude du modele 2009 - 2012
+## Etude du modele 2012 - 2017
+## Etude du modele 2017 - 2022
