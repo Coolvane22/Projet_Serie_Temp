@@ -85,8 +85,22 @@ mean(ts %>%
   diff( differences = 2) 
 ) # -174.1355
 
-```
+## on enleve la tendance (diff de 1)
+serie_wo_tendance <- diff(ts, differences=1)
+plot(serie_wo_tendance)
 
+### saisonnalité ?
+plot(diff(serie_wo_tendance, lag=12))
+
+# on enleve la saisonnalité
+acf(diff(serie_wo_tendance, lag=12))
+```
+esperance constante ? oui
+voir la variance pour la stationnarité
+estimer un ar
+estimer un ma
+on oppose et on choisit
+regression lineaire generalise pour estimer ar et ma
 
 ```{r}
 
