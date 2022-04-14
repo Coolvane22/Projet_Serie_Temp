@@ -1,0 +1,53 @@
+---
+title: "projet"
+author: "Amélie GOUTARD"
+date: '2022-04-07'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importation librairies
+```{r}
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(plyr) 
+```
+
+# Importation et traitements des données 
+Source des données : https://www.insee.fr/fr/statistiques/series/102765746
+```{r}
+## on importe
+caracteristiques <- read_delim("caractéristiques.csv", delim =";")
+v_mensuelles <- read_delim("valeurs_mensuelles.csv", delim =",")
+head(caracteristiques)
+head(v_mensuelles)
+
+## on garde uniquement les colonnes utiles
+depenses <- v_mensuelles %>% 
+  select("Libellé","Situation mensuelle du budget de l'État - Dépenses - Cumul depuis le début de l'année" )
+
+colnames(depenses) <- c("date", "depenses")
+
+## on veut la colonne date au format date
+depenses$date <- ym(depenses$date)
+
+```
+
+```{r}
+
+```
+
+
+
+Etapes à effectuer:
+  -Stat desc
+  -Première ACF
+  -Opérateur différence : détecter tendance et saisonnalité 
+  -Suppression pour arriver à series stationnaires
+  -Reg lin 
+  -Etudes des résidus
+  -ACF + PACF pour déterminer ordre des processus
