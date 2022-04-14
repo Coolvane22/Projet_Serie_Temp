@@ -1,0 +1,218 @@
+---title: "TP2_Serie_temp"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Importation librairies
+```{r}
+library(ggplot2)
+library(timeDate)
+library(forecast)
+library(lmtest)
+library(lubridate)
+```
+
+## TP 2 Série temp.
+
+# Simulation 
+```{r}
+X <- rnorm(100, 0, 1)
+n= 100
+```
+
+Objectif : A quel point retrouve - t -on les aspects théoriques connus des processus 
+
+Simulation bruit blanc
+```{r}
+
+set.seed(1789)
+bb.sim=ts(rnorm(100,sd=3),start=1,end=100)
+plot(bb.sim)
+```
+
+Simulation MA(3)
+
+Simulation AR(1) et AR(2)
+
+```{r}
+phi1= .85
+X=rep(NA,n)
+X[1]=0
+for(t in 2:n){
+  X[t]=phi1*X[t-1]+bb.sim[t]
+}
+```
+
+
+
+Utiliser fonction d'estimation pour retrouver les paramètres
+Stationnaire : si y'a tendance, ne peut pas être stationnaire 
+               garde ces moments d'ordre 1 et 2 
+# Etude du Lake Huron
+Importation données
+```{r}
+data <- LakeHuron
+diff <- diff(data, differences = 7)
+plot(data)
+plot(diff)
+abline(a= 0, b=0)
+```
+On devrait appliquer les filtres différence etc saisonnalité etc
+```{r}
+temps = time(LakeHuron)
+reglin = lm(LakeHuron~temps)
+summary(reglin)
+resi = residuals(reglin)
+v12=c(var(LakeHuron),var(resi))
+v12
+plot(reglin)
+
+
+```
+Le QQ plot montre un bon fit a la loi de Gauss. La parabole observ´ee en
+Residuals vs fitted sugg`ere une regression quadratique ?
+
+```{r}
+plot(LakeHuron)
+abline(reglin)
+```
+
+On fait une étude des résidus : 
+On fait un ACF et un PACF pour déterminer l'ordre des processus 
+```{r}
+op=par(mar=c(4,3,2,2),mgp=c(2,.4,0),oma=c(0,0,0,0))
+plot.ts(LakeHuron, las=1, ylab="niveau", xlab="ann´ee")
+abline(coef= coef(reglin))
+s = c(12,48,59,80);
+ychap = fitted(reglin)
+segments(temps[s],ychap[s],temps[s],LakeHuron[s],lty=1,lwd=2)
+y.gra=1.0009*par()$usr[3]
+text(temps[1],y.gra,labels="obs.",cex=.8)
+text(temps[s],rep(y.gra,length(s)),labels=s,cex=.8)
+par(op)
+```
+1 lines() ajoute des elements a un plot ant´erieur ; abline(a,b)
+ajoute une ligne au plot ant´erieur (et fait rien dans l’absence d’un plot
+ant´erieur).
+
+```{r}
+op=par(mfrow=c(2,1),mar=c(3.5,3.5,2,1),mgp=c(2,.5,0),
+oma=c(0,0,0,0),cex.main=.8,cex.axis=.8,cex=.8,cex.lab=.8)
+plot(as.vector(temps),resi,type="l",xlab="ann´ee",ylab="r´esidu")
+abline(h=0)
+zero = rep(0, length(s))
+segments(temps[s], zero, temps[s], resi[s], lty=3,lwd=1 )
+y.gra=0.9*par()$usr[3]
+text(temps[1],y.gra,labels="obs.",cex=.8)
+text(temps[s],rep(y.gra,length(s)),labels=s,cex=.8)
+n =length(resi)
+plot(resi[-n],resi[-1],xlab="r´esidu en t-1",asp=1,
+ylab="r´esidu en t")
+par(op)
+
+```
+On fait un ACF et un PACF pour déterminer l'ordre des processus 
+
+```{r}
+acf(resi)
+pacf(resi)
+```
+On regarde où l'ACF s'annule : AR(3)
+On regarde où le PACF s'annule : MA(3)
+Lequel choisir?
+On compare par rapport à un critère
+On choisit le critère AIC
+
+Fonction Arima(p,d,q)
+ici MA(3)
+```{r}
+ma3=arima(LakeHuron,order=c(0,0,3),xreg=temps,method="ML")
+ma3
+BIC(ma3)
+
+```
+Ici, AIC = 215.37
+
+On regarder le critère de l'AR(2)
+```{r}
+ar2=arima(LakeHuron,order=c(2,0,0),xreg=temps,method="ML")
+ar2
+BIC(ar2)
+```
+AIC = 212.4 
+Ici on voit que les 2 AIC sont du même ordre de grandeur , mais AR(2) est quand meme plus petit que AR(1)
+Et que le BIC confirme aussi que AR(2) est le meilleur modèle 
+
+On regarde les résidus 
+```{r}
+plot(ma3$residuals)
+plot(ar2$residuals)
+
+```
+Test de Durbin Watson
+```{r}
+dwtest(ar2)
+```
+
+
+# Etude des données champagne
+Importation données
+```{r}
+champagne <- read.table("data/champagne.txt")
+t <- 1:105
+champagne <- cbind(t, champagne )
+plot(champagne, type = "l")
+rho <- acf(champagne$V1, lag = 25)
+```
+
+Pour les dates: transformation des dates 
+library(lubridate)
+ymd() -> transforme une chaine de caractere annee mois jour 
+ymd_hms() -> transforme une chaine de caractere annee mois jour heures minutes secondes 
+```{r}
+is.ts(champagne)
+champa = champagne/1000; # en milliers de bouteilles
+ytr=cbind(champa,log(champa))
+colnames(ytr)=c("champagne","log(champagne)")
+ytr.ts = ts(ytr, frequency=12, start=c(2001,1))
+plot.ts(ytr.ts,xlab="temps")
+
+```
+```{r}
+temps = time(ytr.ts)
+reglin = lm(ytr.ts~temps)
+resi = residuals(reglin)
+v12=c(var(ytr.ts),var(resi))
+v12
+plot(reglin)
+
+```
+
+
+
+
+
+BUT : RESIDUS FINAUX  = BRUITS BLANCS
+Sinon, cela veut dire qu'il y a qq chose qu'on a oublié d'enlever 
+```{r}
+residus <- mod_champ2$residuals
+acf(residus)
+pacf(residus)
+```
+
+
+On regarde où l'ACF s'annule : AR(1)
+On regarde où le PACF s'annule : MA(1)
+Lequel choisir?
+On compare par rapport à un critère
+On choisit le critère AIC
+
+Fonction Arima(p,d,q)
+```{r}
+ma1=arima(,order=c(0,0,1),xreg=temps,method="ML")
+ma1
+```
+
+AIC = 237,17
