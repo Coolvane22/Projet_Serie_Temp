@@ -17,6 +17,7 @@ library(patchwork)
 library(kableExtra)
 library(htmltools)
 library(lubridate)
+library(lmtest)
 library(xts)
 ```
 
@@ -207,4 +208,61 @@ acf(diff(serie_wo_tendance_2017_2022, lag=12))
 ```
 
 L'ACF nous montre bien qu'on a supprimé la saisonnalité et la tendance
+```{r}
+serie_wo_ts_2017_2022 <- diff(serie_wo_tendance_2017_2022, lag=12)
+plot(serie_wo_ts_2017_2022)
+```
+On vérifie qu'on ait bien une série stationnaire
 
+#Détermination des structures de corrélation 
+```{r}
+temps = vm_depenses_2017_2022$Date
+reglin = lm(serie_wo_ts_2017_2022 ~temps)
+summary(reglin)
+resi = residuals(reglin)
+plot(resi)
+```
+
+On regarde l'ACF et le PACF
+```{r}
+acf(resi)
+```
+
+On considère que l'ACF s'annule à lag = 1 
+On va donc tester un AR(1)
+```{r}
+pacf(resi)
+
+```
+On considère que le PACF s'annule à lag = 1 
+On va donc tester un MA(1)
+
+On va tester lequel des processus conviendrait le mieux avec un critère
+On choisit le critère AIC
+
+Fonction Arima(p,d,q)
+ici AR(1)
+```{r}
+ar1=arima(serie_wo_ts_2017_2022,order=c(0,1,0),xreg=serie_wo_ts_2017_2022$Date,method="ML")
+```
+
+# Test de stationnarité
+Le test de Durbin Watson permet de tester l'autocorrélation des résidus 
+```{r}
+dwtest(serie_wo_ts_2017_2022)
+
+```
+
+# Test de bruit blanc 
+```{r}
+Box.test(ts_2017_2022, lag = 12, type = "Ljung-Box")
+
+```
+On voit donc que la proba que la série brute soit un bruit blanc est presque nulle (sans surprise)
+Refaisons le test avec la série supprimé de la tendance et saisonnalité
+
+```{r}
+Box.test(serie_wo_ts_2017_2022, lag = 12, type = "Ljung-Box")
+
+```
+On voit donc que la proba que la série brute soit un bruit blanc est presque nulle
