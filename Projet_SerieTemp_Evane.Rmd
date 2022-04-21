@@ -148,3 +148,63 @@ A etudier: variance
 ## Etude du modele 2009 - 2012
 ## Etude du modele 2012 - 2017
 ## Etude du modele 2017 - 2022
+On se concentre sur le quinquennat mai 2017 - janvier 2022
+```{r}
+vm_depenses_2017_2022 <- vm_depenses %>% filter(Date > "2017-05-01" )
+head(vm_depenses_2017_2022)
+```
+
+Visualisation des dépenses de mai 2017 à janvier 2022
+```{r}
+ vm_depenses_2017_2022%>% plot_ly(type = "scatter", mode = "lines") %>% add_trace( x = ~Date, y=~Depenses) 
+
+```
+
+On identifie que pour chaque année, le mois avec le plus de dépenses est le mois d'avril.
+A première vue on identifie une tendance globale à la hausse
+
+On transforme les données en serie temporelles:
+```{r}
+ts.depenses_2017_2022 = xts(vm_depenses_2017_2022$Depenses, vm_depenses_2017_2022$Date)
+ts.depenses_2017_2022 %>% 
+  ggtsdisplay(
+    plot.type = "scatter"
+  )
+```
+On remarque donc la présence d'une saisonnalité dans l'ACF , et on voit que la structure des résidus indique une corrélation.
+
+
+
+# Suppression tendanCe
+Nous commencons par utiliser l'opérateur différence polynomiale pour identifier la tendance :
+```{r}
+ts_2017_2022 = ts(vm_depenses_2017_2022$Depenses, frequency=12)
+ts.depenses_2017_2022 %>% 
+  diff(
+    differences = 1
+  ) %>% 
+  ggtsdisplay(
+    plot.type = "scatter"
+  )
+
+plot(diff(ts_2017_2022, differences = 1))
+abline(h=mean(na.omit((diff(ts_2017_2022, differences = 1)))), col="red", lwd=1)
+```
+On remarque donc que la moyenne est bien centré en 0 : on a donc une tendance polynomiale de degré 1
+
+Voici notre série temporelle sans notre tendance
+```{r}
+serie_wo_tendance_2017_2022 <- diff(ts_2017_2022, differences=1)
+plot(serie_wo_tendance_2017_2022)
+
+```
+
+# Suppression saisonnalité 
+Nous cherchons donc à supprimer la saisonnalité : PAr les graphiques précédents, on suppose une saisonnalité annuelle : on fixe donc lag à 12.
+```{r}
+plot(diff(serie_wo_tendance_2017_2022, lag=12))
+acf(diff(serie_wo_tendance_2017_2022, lag=12))
+```
+
+L'ACF nous montre bien qu'on a supprimé la saisonnalité et la tendance
+
