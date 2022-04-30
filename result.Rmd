@@ -175,12 +175,12 @@ ts.depenses_2009_2012 %>%
   )
 ```
 L'ACF nous montre les valeurs de la fonction d'auto-covariance, donc de la dépendance entre les observations à chaque décalage.
-On identifie donc des valeurs élevées pour 3, 6,9 et 12 : On constate donc une présence de saisonnalité trimestrielle (de 3 mois).
+On identifie donc une valeur élevée pour 12 : On constate donc une présence de saisonnalité anuelle (de 12 mois).
 
-Regardons maintenant la structure des résidus, le nuage de point est dispersé :  on n'a donc pas corrélation entres les résidus.
+Regardons maintenant la structure des résidus, le nuage de point est dispersé :  on a donc une corrélation entres résidus.
 
 
-# Suppression tendance
+# Suppression tendanCe
 Nous commencons par utiliser l'opérateur différence polynomiale pour identifier la tendance :
 ```{r}
 ts_2009_2012 = ts(vm_depenses_2009_2012$Depenses, frequency=12)
@@ -205,15 +205,15 @@ plot(serie_wo_tendance_2009_2012)
 ```
 
 # Suppression saisonnalité 
-Nous cherchons donc à supprimer la saisonnalité : Par les graphiques précédents, on suppose une saisonnalité trimestrielle : on fixe donc lag à 3.
+Nous cherchons donc à supprimer la saisonnalité : Par les graphiques précédents, on suppose une saisonnalité trimestrielle : on fixe donc lag à 12.
 ```{r}
-plot(diff(serie_wo_tendance_2009_2012, lag=3))
-acf(diff(serie_wo_tendance_2009_2012, lag=3))
+plot(diff(serie_wo_tendance_2009_2012, lag=12))
+acf(diff(serie_wo_tendance_2009_2012, lag=12))
 ```
 
 L'ACF nous montre bien qu'on a supprimé la saisonnalité et la tendance.
 ```{r}
-serie_wo_ts_2009_2012 <- diff(serie_wo_tendance_2009_2012, lag=3)
+serie_wo_ts_2009_2012 <- diff(serie_wo_tendance_2009_2012, lag=12)
 plot(serie_wo_ts_2009_2012)
 ```
 En ayant supprimé la tendance et saisonnalité, on a supprimé la composante déterministe de notre processus.
