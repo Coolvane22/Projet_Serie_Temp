@@ -29,7 +29,7 @@ vm_depenses <- v_mensuelles %>%
 colnames(vm_depenses) <- c("date", "depenses")
 ## on veut la colonne date au format date
 vm_depenses$date <- ym(vm_depenses$date)
-## si on ne veut pas cumule
+## on transforme en valeur non cumulé
 for (j in 1:13){
   for (i in 2:12){
      vm_depenses[i+((j-1)*12), 2] <- vm_depenses[i+((j-1)*12), 2] - sum(vm_depenses[(1+((j-1)*12)):((i-1)+ ((j-1)*12)), 2])
@@ -55,21 +55,20 @@ ts %>%
 forecast::gglagplot(ts, lags = 12, do.lines = FALSE)
 ```
 *Interprétation monthplot* : Le monthplot montre qu'il semble exister une saisonalité et une tendance. En effet, d'une année sur l'autre, les dépenses se suivent plus ou moins de cette façon :
-- janvier février mai juin (voir décembre) : moyenne entre 30000 et 35000 million d'euro
-- mars août septembre novembre : moyenne entre 25000 et 28000 million d'euro
-- juillet octobre et avril bcp de dépenses (particulièrement bien au-dessus des autres mois pour avril)
+- janvier février mai juin (voir décembre) : moyenne entre 30000 et 35000 millions d'euros
+- mars août septembre novembre : moyenne entre 25000 et 28000 millions d'euros
+- juillet octobre et avril beaucoup de dépenses (particulièrement bien au-dessus des autres mois pour avril)
 On remarque globalement une tendance à la hausse au fil des années.  
 
 *Interprétation ACF* : En regardant les auto-corrélations, on remarque des pics fortement positifs (et d'autres négatifs) ainsi qu'un schéma périodique de période 12.  
 
-*Iinterprétation lagplot* : l'axe y montre les valeurs décalées de la série chronologique. Chaque graphique montre Yt tracé en fonction de Yt_k pour différentes valeurs de k. 
+*Interprétation lagplot* : l'axe y montre les valeurs décalées de la série chronologique. Chaque graphique montre Yt tracé en fonction de Yt_k pour différentes valeurs de k. 
 On voit que la relation est fortement positive au décalage 12, ce qui reflète la forte saisonnalité des données.   
 
 
 ### Tendance
 ```{r}
-### tendance ?
-## degre 1 : semble bien
+
 ts %>% 
   diff(
     differences = 1
@@ -101,7 +100,6 @@ Le degré 1 semble avoir bien supprimé la tendance : plus de croissance et la m
 
 ### Saisonnalité
 ```{r}
-### saisonnalite ?
 serie_wo_tendance %>% 
   diff(lag=12) %>% 
   ggtsdisplay(
@@ -110,24 +108,17 @@ serie_wo_tendance %>%
 serie_wo_tendance %>% 
   diff(lag=12) %>% 
   ggtsdisplay()
+
 ## serie sans tendance ni saisonnalite 
 serie_wo_ts <- diff(serie_wo_tendance, lag=12)
-### stationarite ?
 
-Box.test(serie_wo_ts$resid, lag=12, type="Ljung-Box") # bruit blanc donc stationnarite
 ```
 On remarque graphiquement, avec l'ACF, que nous sommes en présence d'un bruit blanc. En effet, 95% des pics de l'ACF se situent entre les pointillés bleus (± 2 / sqrt(T), avec T longueur de la série). Nous savons que tout bruit blanc est stationnaire, donc la série est stationnaire. 
 
-esperance constante ? oui
-voir la variance pour la stationnarité
-estimer un ar
-estimer un ma
-on oppose et on choisit
-regression lineaire generalise pour estimer ar et ma
+
 
 ### Estimation par MCO
 ```{r}
-## estimation par MCO
 t <- 1:length(ts)
 x <- outer(t,1:6)*(pi/6)
 df <- data.frame(ts, t, cos(x), sin(x[,-6]))
@@ -137,18 +128,23 @@ p1 <- ggplot() +
   geom_line(aes(x = dates, y = ts), color = "dodgerblue4") +
   geom_line(aes(x = dates, y = ts_lm$fitted), color = "red")
 p1
+
 ## etude des residus
 ggtsdisplay(ts_lm$residuals, plot.type = "scatter")
 ggtsdisplay(ts_lm$residuals)
 ```
-Pas de corrélation.  
-L'étude des résidus ne nous aide pas forcément à choisir un AR ou MA... Nous allons tester les 2. 
+Le nuage de points nous montre que les résidus sont décorrélées. 
+Nous regardons l'ACF et le PACF afin de déterminer quel processus approchera le mieux notre composante aléatoire :
+Nous voyons que l'ACF s'annule à partir de l'ordre 13, et que le PACF s'annule à partir de l'ordre 15 : 
+Nous avons donc 3 processus possibles à tester : AR(15), MA(13) et la combinaison ARMA(15,13).
+
+Nous allons aussi utiliser l'algorithme auto.arima qui permet d'estimer l'ordre de l'ARIMA() le plus proche.
+
 
 
 ### AR
 ```{r}
-## AR
-ts_ar <- Arima(y = ts_lm$residuals, order = c(15,0,0)) 
+ts_ar <- Arima(y = ts_lm$residuals, order = c(15,0,0)) #AR(15)
 # pas les memes resultats
 ## Test de blancheur
 Box.test(ts_ar$resid, lag=12, type="Ljung-Box") # bruit blanc donc stationnarite
@@ -156,17 +152,23 @@ Box.test(ts_ar$resid, lag=12, type="Ljung-Box") # bruit blanc donc stationnarite
 ```
 *Test de blancheur* : On teste l'hypothèse nulle H0 tous les coefficients sont nuls contre H1 au moins un des coefficients est non nul. On souhaite être sous H0 pour être en situation de bruit blanc. Le test de Ljung-Box donne une p-value = 0.8577. Cette p-value étant supérieure à 5%, on ne rejette pas H0, nous somme en situation de bruit blanc. 
 
-On estime à l'ordre 15, car après cet ordre là le PACF devient négligeable. 
 ### MA
 ```{r}
-ts_ma <- Arima(y = ts_lm$residuals, order = c(0,0,13)) # MA(1)
+ts_ma <- Arima(y = ts_lm$residuals, order = c(0,0,13)) # MA(13)
 ## Test de blancheur
 Box.test(ts_ma$resid, lag=12, type="Ljung-Box") # pas de bruit blanc
 # on test pour h aussi grand que la saisonnalite
 ```
 P-value du test de blancheur supérieure à 5%, on est en présence d'un bruit blanc. 
 
-On estime à l'ordre 13, car après cet ordre là l'ACF devient négligeable.
+### ARMA
+```{r}
+ts_arma <- Arima(y = ts_lm$residuals, order = c(15,0,13)) # ARMA(15, 13)
+## Test de blancheur
+Box.test(ts_arma$resid, lag=12, type="Ljung-Box") # pas de bruit blanc
+# on test pour h aussi grand que la saisonnalite
+```
+La p-value du test de Blancheur est égal à 1
 
 ### ARIMA
 ```{r}
@@ -178,13 +180,17 @@ ts_arima <- Arima(y = ts_lm$residuals, order = c(2,1,4), method = "ML")
 Box.test(ts_arima$resid, lag=12, type="Ljung-Box") # pas de bruit blanc
 # on test pour h aussi grand que la saisonnalite
 ```
-P-value du test de blancheur inférieure à 5% donc on rejette H0 : on n'est pas en présence d'un bruit blanc. 
+L'algorithme suggère les ordres suivants  p = 2, d = 1 et q = 4 : On retrouve donc l'opérateur différence d'ordre 1 .
+
+P-value du test de blancheur inférieure à 5% donc on rejette H0 : on n'est 
+pas en présence d'un bruit blanc. Ce qui est logique puisqu'un ARIMa avec ordre d > 0 n'est pas un processus stationnaire.
 
 ### COMPARAISONS DES MODELES
 #### AIC
 ```{r}
 ts_ar$aic
 ts_ma$aic
+ts_arma$aic
 ts_arima$aic
 ```
 
@@ -192,6 +198,7 @@ ts_arima$aic
 ```{r}
 ts_ar$bic
 ts_ma$bic
+ts_arma$bic
 ts_arima$bic
 ```
 
@@ -199,6 +206,7 @@ ts_arima$bic
 ```{r}
 ts_ar$aicc
 ts_ma$aicc
+ts_arma$aicc
 ts_arima$aicc
 
 ```
@@ -231,6 +239,37 @@ Etapes à effectuer:
   - Reg lin 
   - Etudes des résidus
   - ACF + PACF pour déterminer ordre des processus
+
+## Etude du modele 2017 - 2022
+On se concentre sur le quinquennat mai 2017 - janvier 2022
+```{r}
+vm_depenses_2017_2022 <- vm_depenses %>% filter(Date > "2017-05-01" )
+head(vm_depenses_2017_2022)
+```
+
+Visualisation des dépenses de mai 2017 à janvier 2022
+```{r}
+ vm_depenses_2017_2022%>% plot_ly(type = "scatter", mode = "lines") %>% add_trace( x = ~Date, y=~Depenses) 
+
+```
+
+Avec la visualisation du graphique ,on identifie une répétition pour le mois avec le montant le plus élevé des dépénses : le mois d'avril, puis le montant le moins elevé qui se situe en général lors du mois de septembre. Nous supposons donc une saisonnalite de 6 mois. Au fil des années, on identifie clairement une tendance à la hausse. Cette augmentation des dépenses commencent en 2020 : Ces dépenses s'explique par l'arrivée de la crise du Covid, et continue donc jusqu'à la fin de notre jeu de données décembre 2022. Les dépenses concernent donc les masques, les vaccins, la recherche médicale et de nombreuses autres dépenses.
+
+
+
+On transforme les données en serie temporelles, et affichons les graphiques de l'ACF et des résidus pour valider nos hypotheses:
+```{r}
+ts.depenses_2017_2022 = xts(vm_depenses_2017_2022$Depenses, vm_depenses_2017_2022$Date)
+ts.depenses_2017_2022 %>% 
+  ggtsdisplay(
+    plot.type = "scatter"
+  )
+```
+L'ACF nous montre les valeurs de la fonction d'auto-covariance, donc de la dépendance entre les observations à chaque décalage.
+On identifie donc une valeur élevé pour 6 et 12 : On constate donc une présence de saisonnalité de 6 mois.
+
+Regardons maintenant la structure des résidus, le nuage de point est dispersé :  on n'a donc pas de corrélation entres résidus.
+
 
 ## Prévisions  
 
