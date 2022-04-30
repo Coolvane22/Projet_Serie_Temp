@@ -161,7 +161,7 @@ Visualisation des dépenses de mai 2017 à janvier 2022
 
 ```
 
-Avec la visualisation du graphique ,on identifie une répétition pour le mois avec le montant le plus élevé des dépénses : le mois d'avril, puis le montant le moins elevé qui se situe en général lors du mois de septembre. Nous supposons donc une saisonnalite de 6 mois. Au fil des années, on identifie clairement une tendance à la hausse.
+Avec la visualisation du graphique ,on identifie une répétition pour le mois avec le montant le plus élevé des dépénses : le mois d'avril, puis le montant le moins elevé qui se situe en général lors du mois de septembre. Nous supposons donc une saisonnalite de 6 mois. Au fil des années, on identifie clairement une tendance à la hausse. Cette augmentation des dépenses commencent en 2020 : Ces dépenses s'explique par l'arrivée de la crise du Covid, et continue donc jusqu'à la fin de notre jeu de données décembre 2022. Les dépenses concernent donc les masques, les vaccins, la recherche médicale et de nombreuses autres dépenses.
 
 
 
