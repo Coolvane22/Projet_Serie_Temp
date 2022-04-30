@@ -177,10 +177,10 @@ ts.depenses_2009_2012 %>%
 L'ACF nous montre les valeurs de la fonction d'auto-covariance, donc de la dépendance entre les observations à chaque décalage.
 On identifie donc des valeurs élevées pour 3, 6,9 et 12 : On constate donc une présence de saisonnalité trimestrielle (de 3 mois).
 
-Regardons maintenant la structure des résidus, le nuage de point est dispersé :  on a donc une corrélation entres résidus.
+Regardons maintenant la structure des résidus, le nuage de point est dispersé :  on n'a donc pas corrélation entres les résidus.
 
 
-# Suppression tendanCe
+# Suppression tendance
 Nous commencons par utiliser l'opérateur différence polynomiale pour identifier la tendance :
 ```{r}
 ts_2009_2012 = ts(vm_depenses_2009_2012$Depenses, frequency=12)
