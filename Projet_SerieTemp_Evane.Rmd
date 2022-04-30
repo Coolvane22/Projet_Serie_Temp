@@ -161,10 +161,11 @@ Visualisation des dépenses de mai 2017 à janvier 2022
 
 ```
 
-On identifie que pour chaque année, le mois avec le plus de dépenses est le mois d'avril.
-A première vue on identifie une tendance globale à la hausse
+Avec la visualisation du graphique ,on identifie une répétition pour le mois avec le montant le plus élevé des dépénses : le mois d'avril, puis le montant le moins elevé qui se situe en général lors du mois de septembre. Nous supposons donc une saisonnalite de 6 mois. Au fil des années, on identifie clairement une tendance à la hausse.
 
-On transforme les données en serie temporelles:
+
+
+On transforme les données en serie temporelles, et affichons les graphiques de l'ACF et des résidus pour valider nos hypotheses:
 ```{r}
 ts.depenses_2017_2022 = xts(vm_depenses_2017_2022$Depenses, vm_depenses_2017_2022$Date)
 ts.depenses_2017_2022 %>% 
@@ -172,7 +173,10 @@ ts.depenses_2017_2022 %>%
     plot.type = "scatter"
   )
 ```
-On remarque donc la présence d'une saisonnalité dans l'ACF , et on voit que la structure des résidus indique une corrélation.
+L'ACF nous montre les valeurs de la fonction d'auto-covariance, donc de la dépendance entre les observations à chaque décalage.
+On identifie donc une valeur élevé pour 6 et 12 : On constate donc une présence de saisonnalité de 6 mois.
+
+Regardons maintenant la structure des résidus, le nuage de point est dispersé :  on a donc une corrélation entres résidus.
 
 
 
@@ -203,66 +207,17 @@ plot(serie_wo_tendance_2017_2022)
 # Suppression saisonnalité 
 Nous cherchons donc à supprimer la saisonnalité : PAr les graphiques précédents, on suppose une saisonnalité annuelle : on fixe donc lag à 12.
 ```{r}
-plot(diff(serie_wo_tendance_2017_2022, lag=12))
-acf(diff(serie_wo_tendance_2017_2022, lag=12))
+plot(diff(serie_wo_tendance_2017_2022, lag=6))
+acf(diff(serie_wo_tendance_2017_2022, lag=6))
 ```
 
 L'ACF nous montre bien qu'on a supprimé la saisonnalité et la tendance
 ```{r}
-serie_wo_ts_2017_2022 <- diff(serie_wo_tendance_2017_2022, lag=12)
+serie_wo_ts_2017_2022 <- diff(serie_wo_tendance_2017_2022, lag=6)
 plot(serie_wo_ts_2017_2022)
 ```
-On vérifie qu'on ait bien une série stationnaire
+En ayant supprimé la tendance et saisonnalité, on a supprimé la composante déterministe de notre processus.
+Identifions maintenant si la composante aléatoire est un processus stationnaire.
 
-#Détermination des structures de corrélation 
-```{r}
-temps = vm_depenses_2017_2022$Date
-reglin = lm(serie_wo_ts_2017_2022 ~temps)
-summary(reglin)
-resi = residuals(reglin)
-plot(resi)
-```
 
-On regarde l'ACF et le PACF
-```{r}
-acf(resi)
-```
 
-On considère que l'ACF s'annule à lag = 1 
-On va donc tester un AR(1)
-```{r}
-pacf(resi)
-
-```
-On considère que le PACF s'annule à lag = 1 
-On va donc tester un MA(1)
-
-On va tester lequel des processus conviendrait le mieux avec un critère
-On choisit le critère AIC
-
-Fonction Arima(p,d,q)
-ici AR(1)
-```{r}
-ar1=arima(serie_wo_ts_2017_2022,order=c(0,1,0),xreg=serie_wo_ts_2017_2022$Date,method="ML")
-```
-
-# Test de stationnarité
-Le test de Durbin Watson permet de tester l'autocorrélation des résidus 
-```{r}
-dwtest(serie_wo_ts_2017_2022)
-
-```
-
-# Test de bruit blanc 
-```{r}
-Box.test(ts_2017_2022, lag = 12, type = "Ljung-Box")
-
-```
-On voit donc que la proba que la série brute soit un bruit blanc est presque nulle (sans surprise)
-Refaisons le test avec la série supprimé de la tendance et saisonnalité
-
-```{r}
-Box.test(serie_wo_ts_2017_2022, lag = 12, type = "Ljung-Box")
-
-```
-On voit donc que la proba que la série brute soit un bruit blanc est presque nulle
