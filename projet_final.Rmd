@@ -23,12 +23,15 @@ caracteristiques <- read_delim("data/caractéristiques.csv", delim =";")
 v_mensuelles <- read_delim("data/valeurs_mensuelles.csv", delim =",")
 head(caracteristiques)
 head(v_mensuelles)
+
 ## On garde uniquement les colonnes utiles :
 vm_depenses <- v_mensuelles %>% 
   select("Libellé","Situation mensuelle du budget de l'État - Dépenses - Cumul depuis le début de l'année" )
 colnames(vm_depenses) <- c("date", "depenses")
+
 ## On convertit la colonne date au format date :
 vm_depenses$date <- ym(vm_depenses$date)
+
 ## On convertit les valeurs des dépenses cumulées en valeurs mensuelles non-cumulées.
 for (j in 1:13){
   for (i in 2:12){
@@ -38,6 +41,7 @@ for (j in 1:13){
 ```
 Nous avons décidé d'utiliser les dépenses non-cumulées. Leur unité est exprimée en million d'euros.
 
+
 # Etude du modèle global  
 
 ## Série brute  
@@ -45,11 +49,13 @@ Nous avons décidé d'utiliser les dépenses non-cumulées. Leur unité est expr
 ## month.plot :
 ts = ts(vm_depenses$depenses, frequency=12)
 forecast::ggmonthplot(ts)
+
 ## On représente la série brute :
 ts %>% 
   ggtsdisplay(
     plot.type = "scatter"
   )
+
 ## lagplot :
 forecast::gglagplot(ts, lags = 12, do.lines = FALSE)
 ```
@@ -67,57 +73,47 @@ On voit que la relation est fortement positive au décalage 12, ce qui reflète 
 
 ### Tendance
 ```{r}
-## Degré 1 :
-ts %>% 
-  diff(
-    differences = 1
-  ) %>% 
-  ggtsdisplay(
-    plot.type = "scatter"
-  )
-# Moyenne :
-mean(ts %>% 
-  diff( differences = 1) 
-) # 84.95513
+## degre 1
+a = data.frame(t = 1:156, x = ts %>% diff(differences = 1), ordre = "k = 1")
+mean(a$x) # 84.95513
+## degre 2
+b = data.frame(t = 1:155, x = ts %>% diff(differences = 2), ordre = "k = 2")
+mean(b$x) # -174.1355
+## degre 3
+c = data.frame(t = 1:154, x = ts %>% diff(differences = 3), ordre = "k = 3")
+mean(c$x) # -59.77273
+## degre 4
+d = data.frame(t = 1:153 , x = ts %>% diff(differences = 4), ordre = "k = 4")
+mean(d$x) # -593.5948
+df = bind_rows(a,b,c,d)
 
-## Degré 2 :
-ts %>% 
-  diff(
-    differences = 2
-  ) %>% 
-  ggtsdisplay(
-    plot.type = "scatter"
-  )
-# Moyenne :
-mean(ts %>% 
-  diff( differences = 2) 
-) # -174.1355
+ggplot(data = df, aes(x = t, y = x, color = ordre)) +
+  geom_line() +
+  facet_wrap( ~ ordre)
+
 
 ## On enleve la tendance (Degré 1 donc differences=1) :
 serie_wo_tendance <- diff(ts, differences=1)
+
 ```
 Le degré 1 semble avoir bien supprimé la tendance : plus de croissance et la moyenne est proche de 0 (84.95513). 
 
 ### Saisonnalité
 ```{r}
-## On enlève la saisonnalité :
-serie_wo_tendance %>% 
-  diff(lag=12) %>% 
-  ggtsdisplay(
-    plot.type = "scatter"
-  )
+## On teste différentes valeurs pour la période de la saisonnalité. On teste avec 3, 6, 9 et 
+par(mfrow = c(2,2))
+Acf(serie_wo_tendance %>% diff(lag = 3), main="Lag = 3")
+Acf(serie_wo_tendance %>% diff(lag = 6), main="Lag = 6")
+Acf(serie_wo_tendance %>% diff(lag = 9), main="Lag = 9")
+Acf(serie_wo_tendance %>% diff(lag = 12), main="Lag = 12")
+
+## On enlève la saisonnalité avec  :
 serie_wo_tendance %>% 
   diff(lag=12) %>% 
   ggtsdisplay()
 
 ## Série sans tendance ni saisonnalité :
 serie_wo_ts <- diff(serie_wo_tendance, lag=12)
-
-## Bruit blanc ?
-Box.test(serie_wo_ts, lag=13, type="Ljung-Box")
-# p-val < 0.05 donc pas de bruit blanc : il y a bien quelque chose a modéliser dans la partie non déterministe.
-
-## Variance ? (pour la stationnarité)
 
 ```
 
@@ -132,9 +128,20 @@ p1 <- ggplot() +
   geom_line(aes(x = dates, y = ts), color = "dodgerblue4") +
   geom_line(aes(x = dates, y = ts_lm$fitted), color = "red")
 p1
+
+
 ## Etude des résidus :
 ggtsdisplay(ts_lm$residuals, plot.type = "scatter")
 ggtsdisplay(ts_lm$residuals)
+pacf(ts_lm$residuals)
+
+## Bruit blanc ?
+Box.test(ts_lm$residuals, lag=13, type="Ljung-Box")
+# p-val < 0.05 donc pas de bruit blanc : il y a bien quelque chose a modéliser dans la partie non déterministe.
+
+## Stationnarité ?
+urca::ur.kpss(ts_lm$residuals) # on accepte h0 : stationnaire ok
+
 ```
 Le nuage de points nous montre que les résidus sont décorrélées. 
 Nous regardons l'ACF et le PACF afin de déterminer quel processus approchera le mieux notre composante aléatoire :
