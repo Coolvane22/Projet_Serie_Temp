@@ -17,6 +17,7 @@ sapply(lib, require, character = TRUE)
 
 # Importation et traitements des données 
 Source des données : https://www.insee.fr/fr/statistiques/series/102765746
+Le jeu de données concerne les dépenses cumulées de l'Etat pour la période de janvier 2009 à janvier 2022.
 ```{r}
 ## Importation des données :
 caracteristiques <- read_delim("data/caractéristiques.csv", delim =";")
@@ -46,29 +47,29 @@ Nous avons décidé d'utiliser les dépenses non-cumulées. Leur unité est expr
 
 ## Série brute  
 ```{r}
-## month.plot :
+## Visualisation du  Month.plot :
 ts = ts(vm_depenses$depenses, frequency=12)
 forecast::ggmonthplot(ts)
 
-## On représente la série brute :
+## Visualisation de la série brute :
 ts %>% 
   ggtsdisplay(
     plot.type = "scatter"
   )
 
-## lagplot :
+## Visualisation du Lagplot :
 forecast::gglagplot(ts, lags = 12, do.lines = FALSE)
 ```
 *Interprétation du monthplot* : Le monthplot montre qu'il semble exister une saisonalité et une tendance. En effet, d'une année sur l'autre, les dépenses se suivent plus ou moins de cette façon :
 - janvier février mai juin (voir décembre) : moyenne entre 30000 et 35000 millions d'euros
 - mars août septembre novembre : moyenne entre 25000 et 28000 millions d'euros
 - juillet octobre et avril beaucoup de dépenses (particulièrement bien au-dessus des autres mois pour avril)
-On remarque globalement une tendance à la hausse au fil des années.  
+On remarque globalement une tendance à la hausse au fil des années, sûrement lié à l'inflation.  
 
-*Interprétation de l'ACF* : En regardant les auto-corrélations, on remarque des pics fortement positifs (et d'autres négatifs) ainsi qu'un schéma périodique de période 12.  
+*Interprétation de l'ACF* : En regardant les auto-corrélations, on remarque des pics fortement positifs (et d'autres faiblement négatifs) ainsi qu'un schéma périodique de période 12.On remarque aussi un shéma périodique moins important de période 3 et 6.
 
 *Interprétation du lagplot* : L'axe y montre les valeurs décalées de la série chronologique. Chaque graphique montre Yt tracé en fonction de Yt_k pour différentes valeurs de k. 
-On voit que la relation est fortement positive au décalage 12, ce qui reflète la saisonnalité des données.   
+On voit que la relation est fortement positive au décalage 12, ce qui reflète la saisonnalité des données et nous rassure sur l'interprétation de l'ACF.   
 
 
 ### Tendance
@@ -96,11 +97,12 @@ ggplot(data = df, aes(x = t, y = x, color = ordre)) +
 serie_wo_tendance <- diff(ts, differences=1)
 
 ```
-Le degré 1 semble avoir bien supprimé la tendance : plus de croissance et la moyenne est proche de 0 (84.95513). 
+Nous testons plusieurs degrés de l'opérateur différence afin de repérer l'ordre de la tendance polynomiale (ou linéaire).
+Le degré 1 semble avoir bien supprimé la tendance : plus de croissance et la moyenne est du même ordre de grandeur que 0 (84.95513). 
 
 ### Saisonnalité
 ```{r}
-## On teste différentes valeurs pour la période de la saisonnalité. On teste avec 3, 6, 9 et 
+## On teste différentes valeurs pour la période de la saisonnalité. On teste avec 3, 6, 9 et 12
 par(mfrow = c(2,2))
 Acf(serie_wo_tendance %>% diff(lag = 3), main="Lag = 3")
 Acf(serie_wo_tendance %>% diff(lag = 6), main="Lag = 6")
@@ -116,35 +118,31 @@ serie_wo_tendance %>%
 serie_wo_ts <- diff(serie_wo_tendance, lag=12)
 
 ```
+La saisonnalité a été supprimé seulement pour l'opérateur de différence saisonnière de lag = 12 : On enlève donc les hypothèses de saisonnalité 3, 6 et 9.
 
 ### Estimation par MCO
 ```{r}
+## Régression linéaire
 t <- 1:length(ts)
 x <- outer(t,1:6)*(pi/6)
 df <- data.frame(ts, t, cos(x), sin(x[,-6]))
 ts_lm <- lm(data = df, ts ~ .)
-dates <- time(ts)
-p1 <- ggplot() +
-  geom_line(aes(x = dates, y = ts,colour="depenses")) +
-  geom_line(aes(x = dates, y = ts_lm$fitted+ts_ar$residuals,colour="modele"))+
-  scale_color_manual(name = "series", values = c("depenses" = "darkblue", "modele" = "red"))
-p1
-
 
 ## Etude des résidus :
 ggtsdisplay(ts_lm$residuals, plot.type = "scatter")
 ggtsdisplay(ts_lm$residuals)
 pacf(ts_lm$residuals)
 
-## Bruit blanc ?
+## Test du bruit blanc
 Box.test(ts_lm$residuals, lag=13, type="Ljung-Box")
 # p-val < 0.05 donc pas de bruit blanc : il y a bien quelque chose a modéliser dans la partie non déterministe.
 
-## Stationnarité ?
-urca::ur.kpss(ts_lm$residuals) # on accepte h0 : stationnaire ok
+## Test de stationnarité 
+urca::ur.kpss(ts_lm$residuals) # on accepte h0 : on est sur un processus stationnaire
 
 ```
 Le nuage de points nous montre que les résidus sont décorrélées. 
+Grâce au test de stationnarité , nous pouvous nous interésser à estimer notre composante aléatoire.
 Nous regardons l'ACF et le PACF afin de déterminer quel processus approchera le mieux notre composante aléatoire :
 Nous voyons que l'ACF s'annule à partir de l'ordre 13, et que le PACF s'annule à partir de l'ordre 15 : 
 Nous avons donc 3 processus possibles à tester : AR(15), MA(13) et la combinaison ARMA(15,13).
@@ -154,11 +152,10 @@ Nous allons aussi utiliser l'algorithme auto.arima qui permet d'estimer l'ordre 
 ### AR
 ```{r}
 ts_ar <- Arima(y = ts_lm$residuals, order = c(15,0,0)) #AR(15)
-# Résultats différents.
 
 ## Test de blancheur :
-Box.test(ts_ar$resid, lag=12, type="Ljung-Box") # bruit blanc donc stationnarité
-# On test pour h aussi grand que la saisonnalite
+Box.test(ts_ar$resid, lag=13, type="Ljung-Box") # bruit blanc donc stationnarité
+# Le choix de h doit être aussi grand que la stationnarité
 ```
 *Test de blancheur* : On teste l'hypothèse nulle H0 : Tous les coefficients sont nuls, contre l'hypothèse H1 : Au moins un des coefficients est non-nul. On souhaite être sous H0 pour être en situation de bruit blanc. Le test de Ljung-Box donne une p-value = 0.9998. Cette p-value étant supérieure à 5%, on ne rejette pas H0, nous somme donc en situation de bruit blanc. 
 
@@ -167,8 +164,8 @@ Box.test(ts_ar$resid, lag=12, type="Ljung-Box") # bruit blanc donc stationnarit�
 ts_ma <- Arima(y = ts_lm$residuals, order = c(0,0,13)) # MA(13)
 
 ## Test de blancheur :
-Box.test(ts_ma$resid, lag=12, type="Ljung-Box") # Pas de bruit blanc
-# On test pour h aussi grand que la saisonnalité :
+Box.test(ts_ma$resid, lag=13, type="Ljung-Box") 
+# On teste pour h plus grand que la saisonnalité :
 ```
 P-value du test de blancheur supérieure à 5%, on est donc en présence d'un bruit blanc. 
 
@@ -177,20 +174,18 @@ P-value du test de blancheur supérieure à 5%, on est donc en présence d'un br
 ts_arma <- Arima(y = ts_lm$residuals, order = c(15,0,13)) # ARMA(15, 13)
 
 ## Test de blancheur :
-Box.test(ts_arma$resid, lag=12, type="Ljung-Box") # Pas de bruit blanc.
-# On test pour h aussi grand que la saisonnalité :
+Box.test(ts_arma$resid, lag=13, type="Ljung-Box") 
 ```
-La p-value du test de Blancheur est égal à 1, on est donc en présence d'un bruit blanc.
+La p-value du test de blancheur est égal à 1, on est donc en présence d'un bruit blanc.
 
 ### ARIMA
 ```{r}
 auto.arima(ts_lm$residuals, trace=TRUE)
-# L'algorithme suggère pour la partie non-saisonnière du modèle p=2, d=1 et q=4. Il ne suggère pas de partie saisonnière. 
+
 ts_arima <- Arima(y = ts_lm$residuals, order = c(2,1,4), method = "ML") 
 
 ## Test de blancheur :
-Box.test(ts_arima$resid, lag=12, type="Ljung-Box") # Pas de bruit blanc.
-# On test pour h aussi grand que la saisonnalité.
+Box.test(ts_arima$resid, lag=12, type="Ljung-Box") 
 ```
 L'algorithme suggère les ordres suivants  p = 2, d = 1 et q = 4 : On retrouve donc l'opérateur différence d'ordre 1.
 
@@ -226,6 +221,16 @@ ts_arima$aicc
 Préférence pour l'AR(15).
 
 Suite à ces comparaisons, on peut avoir une légère préférence pour l'AR(15).
+On superpose notre modèle crée et nos données:
+```{r}
+dates <- time(ts)
+p1 <- ggplot() +
+  geom_line(aes(x = dates, y = ts,colour="depenses")) +
+  geom_line(aes(x = dates, y = ts_lm$fitted+ts_ar$residuals,colour="modele"))+
+  scale_color_manual(name = "series", values = c("depenses" = "darkblue", "modele" = "red"))
+p1
+```
+
 
 ## Etude du modele 2017 - 2022
 On se concentre ici sur le quinquennat mai 2017 - janvier 2022.
@@ -243,7 +248,7 @@ Avec la visualisation du graphique, on observe en général des pics de dépense
 
 On transforme les données en serie temporelles, et on affiche les graphiques de l'ACF et des résidus pour valider nos hypotheses :
 ```{r}
-ts.depenses_2017_2022 = xts(vm_depenses_2017_2022$depenses, vm_depenses_2017_2022$date)
+ts.depenses_2017_2022 = ts(vm_depenses_2017_2022$depenses, vm_depenses_2017_2022$date)
 ts.depenses_2017_2022 %>% 
   ggtsdisplay(
     plot.type = "scatter"
@@ -268,14 +273,25 @@ newx <- outer(newt,1:6)*(pi/6)
 newdf <- data.frame(ts=0,t=newt, cos(newx), sin(newx[,-6]))
 newdf<-newdf[158,]
 pred_lm = predict(ts_lm, newdata = newdf)
+
+# Prédictions pour l'AR
 pred_ar = predict(ts_ar)$pred
 pred_ar = pred_ar+pred_lm
 pred_ar
+
+# Prédictions pour le MA
 pred_ma = predict(ts_ma)$pred
 pred_ma = pred_ma+pred_lm
 pred_ma
+
+# Prédictions pour l'ARMA
+pred_arma = predict(ts_arma)$pred
+pred_arma = pred_arma+pred_lm
+pred_arma
+
+# Prédictions pour l'ARIMA
 pred_arima = predict(ts_arima)$pred
 pred_arima = pred_arima+pred_lm
 pred_arima
 ```
-Les prévisions sont plutôt satisfaisantes. La prévision la plus proche de la réalité reste la prévision avec l'AR(15).
+Les prévisions sont plutôt satisfaisantes. La prévision la plus proche de la réalité reste la prévision avec l'AR(15). Cela nous confirme donc notre théorie.
