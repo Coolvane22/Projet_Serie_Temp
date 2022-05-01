@@ -125,8 +125,9 @@ df <- data.frame(ts, t, cos(x), sin(x[,-6]))
 ts_lm <- lm(data = df, ts ~ .)
 dates <- time(ts)
 p1 <- ggplot() +
-  geom_line(aes(x = dates, y = ts), color = "dodgerblue4") +
-  geom_line(aes(x = dates, y = ts_lm$fitted), color = "red")
+  geom_line(aes(x = dates, y = ts,colour="depenses")) +
+  geom_line(aes(x = dates, y = ts_lm$fitted+ts_ar$residuals,colour="modele"))+
+  scale_color_manual(name = "series", values = c("depenses" = "darkblue", "modele" = "red"))
 p1
 
 
